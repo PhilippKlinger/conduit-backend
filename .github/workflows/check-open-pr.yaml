@@ -3,7 +3,7 @@ name: Check open PR for feature branch
 on:
   push:
     branches-ignore:
-      - main
+      - master
   pull_request:
     types: [opened]
 
