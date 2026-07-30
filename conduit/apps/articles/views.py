@@ -1,5 +1,7 @@
+from django.http import HttpResponse
+
 from rest_framework import generics, mixins, status, viewsets
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import (
     AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 )
@@ -104,6 +106,19 @@ class ArticleViewSet(mixins.CreateModelMixin,
         serializer.save()
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, slug):
+        try:
+            article = self.queryset.get(slug=slug)
+        except Article.DoesNotExist:
+            raise NotFound('An article with this slug does not exist.')
+
+        if article.author != request.user.profile:
+            raise PermissionDenied('You can only delete your own articles.')
+
+        article.delete()
+
+        return HttpResponse(status=status.HTTP_204_NO_CONTENT)
 
 
 class CommentsListCreateAPIView(generics.ListCreateAPIView):

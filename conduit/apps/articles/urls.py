@@ -11,9 +11,9 @@ router = DefaultRouter(trailing_slash=False)
 router.register(r'articles', ArticleViewSet)
 
 urlpatterns = [
-    url(r'^', include(router.urls)),
-
     url(r'^articles/feed/?$', ArticlesFeedAPIView.as_view()),
+
+    url(r'^', include(router.urls)),
 
     url(r'^articles/(?P<article_slug>[-\w]+)/favorite/?$',
         ArticlesFavoriteAPIView.as_view()),
