@@ -4,41 +4,28 @@ set -eu
 POSTGRES_HOST="${POSTGRES_HOST:-database}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 DB_WAIT_TIMEOUT="${DB_WAIT_TIMEOUT:-60}"
-GUNICORN_BIND="${GUNICORN_BIND:-0.0.0.0:8000}"
 GUNICORN_WORKERS="${GUNICORN_WORKERS:-3}"
 
-# The slim image has no PostgreSQL client tools, so use Python's standard
-# library to wait until the database port accepts connections.
-echo "[entrypoint] waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT}"
-python - "${POSTGRES_HOST}" "${POSTGRES_PORT}" "${DB_WAIT_TIMEOUT}" <<'PY'
-import socket
-import sys
-import time
-
-host = sys.argv[1]
-port = int(sys.argv[2])
-deadline = time.time() + int(sys.argv[3])
-
-while time.time() < deadline:
-    try:
-        connection = socket.create_connection((host, port), timeout=2)
-        connection.close()
-        sys.exit(0)
-    except OSError:
-        time.sleep(1)
-
-print("[entrypoint] PostgreSQL did not become reachable", file=sys.stderr)
-sys.exit(1)
-PY
+# no psql client in the slim image, so test the port with python
+WAITED=0
+until python -c "import socket,sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 2)" "${POSTGRES_HOST}" "${POSTGRES_PORT}" 2>/dev/null; do
+    if [ "${WAITED}" -ge "${DB_WAIT_TIMEOUT}" ]; then
+        echo "[entrypoint] PostgreSQL not reachable after ${DB_WAIT_TIMEOUT}s" >&2
+        exit 1
+    fi
+    echo "[entrypoint] waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT}"
+    WAITED=$((WAITED + 2))
+    sleep 2
+done
 
 # Apply pending schema changes before accepting application traffic.
 echo "[entrypoint] applying database migrations"
 python manage.py migrate --noinput
 
 # Exec keeps Gunicorn as PID 1 so Docker can forward stop signals correctly.
-echo "[entrypoint] starting Gunicorn on ${GUNICORN_BIND}"
+echo "[entrypoint] starting Gunicorn on 0.0.0.0:8000"
 exec gunicorn conduit.wsgi:application \
-    --bind "${GUNICORN_BIND}" \
+    --bind 0.0.0.0:8000 \
     --workers "${GUNICORN_WORKERS}" \
     --access-logfile - \
     --error-logfile -
