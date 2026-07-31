@@ -11,6 +11,7 @@ router = DefaultRouter(trailing_slash=False)
 router.register(r'articles', ArticleViewSet)
 
 urlpatterns = [
+    # must stay before the router, otherwise "feed" matches as an article slug
     url(r'^articles/feed/?$', ArticlesFeedAPIView.as_view()),
 
     url(r'^', include(router.urls)),
